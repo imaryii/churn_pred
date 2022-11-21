@@ -1,0 +1,43 @@
+import pandas as pd
+train = pd.read_hdf("../Downloads/train_churn_pred.h5")
+test = pd.read_hdf("../Downloads/test_churn_pred.h5")
+
+train = train.drop('id', axis=1)
+test = test.drop('id', axis=1)
+
+train.to_csv('train_churn_pred.csv', index=False)
+test.to_csv('test_churn_pred.csv', index=False)
+
+
+import h2o
+from h2o.automl import H2OAutoML
+h2o.init()
+
+
+train = h2o.import_file("train_churn_pred.csv")
+test = h2o.import_file("test_churn_pred.csv")
+
+y = "churn_probability"
+x = list(train.columns)
+x.remove(y)
+
+train[y] = train[y].asfactor()
+
+preprocessing = ['target_encoding']
+
+aml = H2OAutoML(max_runtime_secs = 1800, 
+                stopping_metric='aucpr', 
+                sort_metric='aucpr', 
+                preprocessing=preprocessing,
+                keep_cross_validation_predictions=True)
+                
+                
+aml.train(x = x, y = y, training_frame = train)
+
+
+df = aml.leader.predict(test)
+df_test = pd.read_hdf("../Downloads/test_churn_pred.h5")
+df_test['churn_probability'] = (df.as_data_frame().p1.values > 0.1659373).astype(int)
+
+
+df_test[ ["id", "churn_probability"] ].to_csv("dummy_predict_v2.csv", index=False)
